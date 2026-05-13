@@ -1,36 +1,61 @@
 import os
 
+import cloudinary
+import cloudinary.uploader
 from flask import (
     Flask,
     redirect,
     render_template,
     request,
-    send_from_directory,
     session,
-    url_for,
 )
 
 app = Flask(__name__)
 
-app.secret_key = "cambia_esta_clave"
+# =========================
+# VARIABLES DE ENTORNO
+# =========================
 
-PASSWORD = "redgas572"
+SECRET_KEY = os.getenv("SECRET_KEY")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
-UPLOAD_FOLDER = "uploads"
-IMAGE_NAME = "imagen_actual.jpg"
+CLOUD_NAME = os.getenv("CLOUD_NAME")
+API_KEY = os.getenv("API_KEY")
+API_SECRET = os.getenv("API_SECRET")
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# =========================
+# FLASK
+# =========================
+
+app.secret_key = SECRET_KEY
+
+# =========================
+# CLOUDINARY
+# =========================
+
+cloudinary.config(
+    cloud_name=CLOUD_NAME,
+    api_key=API_KEY,
+    api_secret=API_SECRET,
+    secure=True,
+)
+
+# =========================
+# QR PUBLICO
+# =========================
 
 
 @app.route("/qr")
 def qr():
 
-    image_path = os.path.join(UPLOAD_FOLDER, IMAGE_NAME)
+    url = f"https://res.cloudinary.com/{CLOUD_NAME}/image/upload/imagen_qr"
 
-    if not os.path.exists(image_path):
-        return "No hay imagen subida"
+    return redirect(url)
 
-    return send_from_directory(UPLOAD_FOLDER, IMAGE_NAME)
+
+# =========================
+# LOGIN
+# =========================
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -41,7 +66,7 @@ def login():
     if request.method == "POST":
         password = request.form.get("password")
 
-        if password == PASSWORD:
+        if password == ADMIN_PASSWORD:
             session["admin"] = True
 
             return redirect("/admin")
@@ -52,12 +77,22 @@ def login():
     return render_template("login.html", error=error)
 
 
+# =========================
+# LOGOUT
+# =========================
+
+
 @app.route("/logout")
 def logout():
 
     session.clear()
 
     return redirect("/")
+
+
+# =========================
+# PANEL ADMIN
+# =========================
 
 
 @app.route("/admin", methods=["GET", "POST"])
@@ -72,14 +107,24 @@ def admin():
         file = request.files.get("imagen")
 
         if file and file.filename != "":
-            path = os.path.join(UPLOAD_FOLDER, IMAGE_NAME)
-
-            file.save(path)
+            cloudinary.uploader.upload(
+                file,
+                # Siempre misma imagen
+                public_id="imagen_qr",
+                # Reemplazar imagen anterior
+                overwrite=True,
+                # Limpiar cache CDN
+                invalidate=True,
+            )
 
             mensaje = "Imagen actualizada"
 
     return render_template("admin.html", mensaje=mensaje)
 
+
+# =========================
+# RUN
+# =========================
 
 if __name__ == "__main__":
     app.run(debug=True)
